@@ -15,7 +15,6 @@
   -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:clipChildren="false"
@@ -69,16 +68,14 @@
                     android:textAppearance="@style/Typography.DuckDuckGo.Onboarding.Body.InContext"
                     app:typography="body1" />
 
-                <com.duckduckgo.common.ui.view.button.DaxButtonPrimary
+                <com.duckduckgo.common.ui.view.button.DaxButtonBrand
                     android:id="@+id/duckAiEndCtaBrandDesignOkButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
                     android:text="@string/duckAiEndCtaButton"
-                    android:theme="@style/ThemeOverlay.DuckDuckGo.Onboarding"
-                    android:textAppearance="@style/Typography.DuckDuckGo.Onboarding.Button"
-                    app:daxButtonSize="large"
-                    tools:ignore="InvalidDaxButtonProperty" />
+                    app:daxButtonBrandTypography="duckSans"
+                    app:daxButtonSize="large" />
 
             </LinearLayout>
         </com.duckduckgo.common.ui.view.shape.DaxOnboardingBubbleBrandDesignUpdateCardView>
