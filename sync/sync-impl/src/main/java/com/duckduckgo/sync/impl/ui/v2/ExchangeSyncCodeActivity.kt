@@ -127,10 +127,10 @@ class ExchangeSyncCodeActivity : DuckDuckGoActivity() {
         peerKind: PeerKind?,
     ) {
         TextAlertDialogBuilder(this)
-            .setTitle(R.string.sync_simplified_pairing_dialog_host_confirmation_title)
+            .setTitle(R.string.sync_simplified_pairing_dialog_host_title)
             .setMessage(syncV2ConfirmationMessage(peerName, peerKind))
-            .setPositiveButton(R.string.sync_simplified_pairing_dialog_host_positive_cta)
-            .setNegativeButton(R.string.sync_simplified_pairing_dialog_host_negative_cta)
+            .setPositiveButton(R.string.sync_simplified_pairing_dialog_host_primary_button)
+            .setNegativeButton(R.string.sync_simplified_pairing_dialog_host_secondary_button)
             .addEventListener(
                 object : TextAlertDialogBuilder.EventListener() {
                     override fun onPositiveButtonClicked() {
@@ -150,10 +150,10 @@ class ExchangeSyncCodeActivity : DuckDuckGoActivity() {
         peerKind: PeerKind?,
     ) {
         TextAlertDialogBuilder(this)
-            .setTitle(R.string.sync_simplified_pairing_dialog_joiner_confirmation_title)
+            .setTitle(R.string.sync_simplified_pairing_dialog_joiner_title)
             .setMessage(syncV2ConfirmationMessage(peerName, peerKind))
-            .setPositiveButton(R.string.sync_simplified_pairing_dialog_joiner_positive_cta)
-            .setNegativeButton(R.string.sync_simplified_pairing_dialog_joiner_negative_cta)
+            .setPositiveButton(R.string.sync_simplified_pairing_dialog_joiner_primary_button)
+            .setNegativeButton(R.string.sync_simplified_pairing_dialog_joiner_secondary_button)
             .addEventListener(
                 object : TextAlertDialogBuilder.EventListener() {
                     override fun onPositiveButtonClicked() {
@@ -190,8 +190,8 @@ class ExchangeSyncCodeActivity : DuckDuckGoActivity() {
 
     private fun showPairingAcknowledgmentDialog() {
         TextAlertDialogBuilder(this)
-            .setTitle(R.string.sync_simplified_pairing_dialog_confirm_title)
-            .setPositiveButton(R.string.sync_simplified_pairing_dialog_confirm_cta)
+            .setTitle(R.string.sync_simplified_pairing_dialog_acknowledgment_title)
+            .setPositiveButton(R.string.sync_simplified_pairing_dialog_acknowledgment_primary_button)
             .addEventListener(
                 object : TextAlertDialogBuilder.EventListener() {
                     override fun onPositiveButtonClicked() {
@@ -224,9 +224,9 @@ class ExchangeSyncCodeActivity : DuckDuckGoActivity() {
 
     private fun configureHeadline() {
         val text = if (intent.getBooleanExtra(IS_RECOVERY_FLOW_EXTRA_KEY, false)) {
-            R.string.sync_recovering_data_v2_headline
+            R.string.sync_simplified_pairing_headline_recovery
         } else {
-            R.string.sync_another_device_v2_headline
+            R.string.sync_simplified_pairing_headline
         }
         binding.headlineText.setText(text)
     }

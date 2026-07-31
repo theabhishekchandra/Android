@@ -43,7 +43,7 @@ class ReadSyncCodeViewModel @Inject constructor(
     fun pasteSyncCode() {
         val code = clipboard.pasteFromClipboard()
         viewModelScope.launch {
-            processCode(code, invalidCodeMessage = R.string.sync_scanner_v2_manual_entry_invalid_code_pasted)
+            processCode(code, invalidCodeMessage = R.string.sync_simplified_scanner_manual_entry_invalid_code_message)
         }
     }
 
@@ -52,7 +52,7 @@ class ReadSyncCodeViewModel @Inject constructor(
         // view, so without debouncing a single scan would repeatedly start the sync flow.
         if (scanCodeJob?.isActive == true) return
         scanCodeJob = viewModelScope.launch {
-            processCode(code, invalidCodeMessage = R.string.sync_scanner_v2_scan_qr_code_invalid_code_scanned)
+            processCode(code, invalidCodeMessage = R.string.sync_simplified_scanner_camera_invalid_code_message)
             delay(SCAN_CODE_DEBOUNCE_DURATION)
         }
     }

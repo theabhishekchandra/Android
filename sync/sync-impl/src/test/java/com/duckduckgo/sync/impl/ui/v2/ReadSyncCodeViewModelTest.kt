@@ -85,7 +85,7 @@ class ReadSyncCodeViewModelTest {
 
             val command = awaitItem()
             assertIs<ShowMessage>(command)
-            assertEquals(R.string.sync_scanner_v2_manual_entry_invalid_code_pasted, command.message)
+            assertEquals(R.string.sync_simplified_scanner_manual_entry_invalid_code_message, command.message)
 
             expectNoEvents()
             cancel()
@@ -99,7 +99,7 @@ class ReadSyncCodeViewModelTest {
 
             val command = awaitItem()
             assertIs<ShowMessage>(command)
-            assertEquals(R.string.sync_scanner_v2_scan_qr_code_invalid_code_scanned, command.message)
+            assertEquals(R.string.sync_simplified_scanner_camera_invalid_code_message, command.message)
 
             expectNoEvents()
             cancel()
