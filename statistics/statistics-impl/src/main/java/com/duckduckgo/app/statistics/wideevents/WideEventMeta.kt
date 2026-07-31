@@ -22,5 +22,9 @@ internal object WideEventMeta {
     /** `meta.type` is kebab-case across all platforms, hence the separator normalization. */
     fun typeFor(eventName: String): String = TYPE_PREFIX + eventName.replace('_', '-')
 
+    /** MAJOR tracks the base template shared by every wide event, so callers only declare MINOR and PATCH. */
+    fun versionFor(version: WideEventDefinition.Version): String = "$BASE_TEMPLATE_MAJOR.${version.minor}.${version.patch}"
+
     private const val TYPE_PREFIX = "android-"
+    private const val BASE_TEMPLATE_MAJOR = 1
 }
