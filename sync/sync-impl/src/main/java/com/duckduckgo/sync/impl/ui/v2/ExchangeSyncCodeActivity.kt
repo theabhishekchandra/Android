@@ -93,6 +93,7 @@ class ExchangeSyncCodeActivity : DuckDuckGoActivity() {
             configureEdgeToEdgeInsets()
         }
 
+        configureHeadline()
         configureAcknowledgementAnimation()
         configureConnectingLabel()
 
@@ -199,6 +200,15 @@ class ExchangeSyncCodeActivity : DuckDuckGoActivity() {
         edgeToEdgeHandler.applySystemBarInsets(binding.root)
     }
 
+    private fun configureHeadline() {
+        val text = if (intent.getBooleanExtra(IS_RECOVERY_FLOW_EXTRA_KEY, false)) {
+            R.string.sync_recovering_data_v2_headline
+        } else {
+            R.string.sync_another_device_v2_headline
+        }
+        binding.headlineText.setText(text)
+    }
+
     private fun configureConnectingLabel() {
         val progressDrawableSpec = CircularProgressIndicatorSpec(this, null, 0).apply {
             indicatorSize = 20.toPx()
@@ -225,15 +235,18 @@ class ExchangeSyncCodeActivity : DuckDuckGoActivity() {
     companion object {
         private const val SYNC_URL_EXTRA_KEY = "sync_url"
         private const val LAUNCH_SOURCE_EXTRA_KEY = "launch_source"
+        private const val IS_RECOVERY_FLOW_EXTRA_KEY = "is_recovery_flow"
 
         fun intent(
             context: Context,
             syncUrl: String,
             launchSource: String?,
+            isRecoveryFlow: Boolean = false,
         ): Intent {
             return Intent(context, ExchangeSyncCodeActivity::class.java).apply {
                 putExtra(SYNC_URL_EXTRA_KEY, syncUrl)
                 putExtra(LAUNCH_SOURCE_EXTRA_KEY, launchSource)
+                putExtra(IS_RECOVERY_FLOW_EXTRA_KEY, isRecoveryFlow)
             }
         }
     }
