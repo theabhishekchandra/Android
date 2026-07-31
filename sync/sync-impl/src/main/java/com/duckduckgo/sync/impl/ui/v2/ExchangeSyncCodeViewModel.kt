@@ -20,11 +20,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.sync.impl.AccountErrorCodes.ALREADY_SIGNED_IN
 import com.duckduckgo.sync.impl.DispatchOutcome
+import com.duckduckgo.sync.impl.ExchangeResult.AccountSwitchingRequired
+import com.duckduckgo.sync.impl.ExchangeResult.LoggedIn
+import com.duckduckgo.sync.impl.ExchangeResult.Pending
+import com.duckduckgo.sync.impl.Result.Error
 import com.duckduckgo.sync.impl.RouteDecision
 import com.duckduckgo.sync.impl.SyncAccountRepository
 import com.duckduckgo.sync.impl.SyncAuthCode.Exchange
 import com.duckduckgo.sync.impl.SyncCodeDispatcher
+import com.duckduckgo.sync.impl.SyncFeature
 import com.duckduckgo.sync.impl.onFailure
 import com.duckduckgo.sync.impl.onSuccess
 import com.duckduckgo.sync.impl.pixels.SyncPixels.PeerKind
@@ -41,15 +47,17 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import logcat.logcat
+import kotlin.time.Duration.Companion.seconds
 
 class ExchangeSyncCodeViewModel @AssistedInject constructor(
     @Assisted private val syncUrl: String,
     private val accountRepository: SyncAccountRepository,
     private val codeDispatcher: SyncCodeDispatcher,
+    private val syncFeature: SyncFeature,
     private val dispatchers: DispatcherProvider,
 ) : ViewModel() {
     private val _commands = Channel<Command>(Channel.BUFFERED)
@@ -105,6 +113,27 @@ class ExchangeSyncCodeViewModel @AssistedInject constructor(
         }
     }
 
+    fun onUserAcceptedSwitchingAccount(encodedStringCode: String) {
+        viewModelScope.launch(dispatchers.io()) {
+            accountRepository.logoutAndJoinNewAccount(encodedStringCode)
+                .onSuccess {
+                    animationCompletionSignal.await()
+                    _commands.send(Command.SetPairingResult(pairingResult()))
+                    _commands.send(Command.Close)
+                }
+                .onFailure { failure ->
+                    _commands.send(Command.ShowV1Error(failure.toV1PairingError()))
+                }
+        }
+    }
+
+    fun onUserCancelledSwitchingAccount() {
+        viewModelScope.launch {
+            _commands.send(Command.SetPairingResult(SyncPairingResult.Failure))
+            _commands.send(Command.Close)
+        }
+    }
+
     private suspend fun handleV1CodeDecision(decision: RouteDecision.Legacy) {
         _commands.send(Command.RunAcknowledgmentAnimation)
         val authCode = decision.authCode
@@ -113,7 +142,7 @@ class ExchangeSyncCodeViewModel @AssistedInject constructor(
                 .onSuccess {
                     when (authCode) {
                         is Exchange -> {
-                            logcat { "TODO: Poll for recovery key" }
+                            pollForV1RecoveryKey()
                         }
 
                         else -> {
@@ -124,8 +153,45 @@ class ExchangeSyncCodeViewModel @AssistedInject constructor(
                     }
                 }
                 .onFailure { failure ->
-                    _commands.send(Command.ShowV1Error(failure.toV1PairingError()))
+                    emitV1Error(failure)
                 }
+        }
+    }
+
+    private suspend fun pollForV1RecoveryKey() {
+        var isPolling = true
+        while (isPolling) {
+            delay(POLLING_INTERVAL_EXCHANGE_FLOW)
+            withContext(dispatchers.io()) { accountRepository.pollForRecoveryCodeAndLogin() }
+                .onSuccess { result ->
+                    when (result) {
+                        is AccountSwitchingRequired -> {
+                            _commands.send(Command.AskSwitchAccount(result.recoveryCode))
+                            isPolling = false
+                        }
+
+                        is LoggedIn -> {
+                            animationCompletionSignal.await()
+                            _commands.send(Command.SetPairingResult(pairingResult()))
+                            _commands.send(Command.Close)
+                            isPolling = false
+                        }
+
+                        is Pending -> Unit
+                    }
+                }
+                .onFailure { failure ->
+                    emitV1Error(failure)
+                    isPolling = false
+                }
+        }
+    }
+
+    private suspend fun emitV1Error(failure: Error) {
+        if (failure.code == ALREADY_SIGNED_IN.code && syncFeature.seamlessAccountSwitching().isEnabled()) {
+            _commands.send(Command.AskSwitchAccount(syncUrl))
+        } else {
+            _commands.send(Command.ShowV1Error(failure.toV1PairingError()))
         }
     }
 
@@ -170,6 +236,14 @@ class ExchangeSyncCodeViewModel @AssistedInject constructor(
         }
     }
 
+    private suspend fun pairingResult(): SyncPairingResult = withContext(dispatchers.io()) {
+        accountRepository
+            .getThisConnectedDevice()
+            ?.let(ParcelableDevice::fromConnectedDevice)
+            ?.let { device -> SyncPairingResult.Success(device, PairingMethod.ScannedCode) }
+            ?: SyncPairingResult.Failure
+    }
+
     internal sealed interface Command {
         data class AskJoinerConfirmation(
             val peerName: String?,
@@ -179,6 +253,10 @@ class ExchangeSyncCodeViewModel @AssistedInject constructor(
         data class AskHostConfirmation(
             val peerName: String?,
             val peerKind: PeerKind? = null,
+        ) : Command
+
+        data class AskSwitchAccount(
+            val encodedStringCode: String,
         ) : Command
 
         data object ShowPairingAcknowledgement : Command
@@ -200,14 +278,6 @@ class ExchangeSyncCodeViewModel @AssistedInject constructor(
         data object Close : Command
     }
 
-    private suspend fun pairingResult(): SyncPairingResult = withContext(dispatchers.io()) {
-        accountRepository
-            .getThisConnectedDevice()
-            ?.let(ParcelableDevice::fromConnectedDevice)
-            ?.let { device -> SyncPairingResult.Success(device, PairingMethod.ScannedCode) }
-            ?: SyncPairingResult.Failure
-    }
-
     @AssistedFactory
     interface Factory {
         fun create(syncUrl: String): ExchangeSyncCodeViewModel
@@ -222,5 +292,9 @@ class ExchangeSyncCodeViewModel @AssistedInject constructor(
                 return assistedFactory.create(syncUrl) as T
             }
         }
+    }
+
+    companion object {
+        private val POLLING_INTERVAL_EXCHANGE_FLOW = 2.seconds
     }
 }
