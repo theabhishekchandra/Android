@@ -32,6 +32,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mockito.mock
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argThat
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -90,6 +91,8 @@ class PixelWideEventSenderTest {
 
             val expectedParameters =
                 mapOf(
+                    "meta.type" to "android-subscription-purchase",
+                    "meta.version" to "1.0.0",
                     "global.platform" to "Android",
                     "global.type" to "app",
                     "global.sample_rate" to "1.0",
@@ -119,6 +122,50 @@ class PixelWideEventSenderTest {
             )
         }
 
+    @Test
+    fun `when event name contains underscores then meta type uses hyphens`() =
+        runTest {
+            val event =
+                createWideEvent(
+                    id = 456L,
+                    name = "some_event_name",
+                    status = WideEventRepository.WideEventStatus.SUCCESS,
+                )
+
+            pixelWideEventSender.sendWideEvent(event)
+
+            verify(pixel).enqueueFire(
+                pixelName = eq("wide_some_event_name_c"),
+                parameters = argThat { get("meta.type") == "android-some-event-name" },
+                encodedParameters = any(),
+                type = any(),
+            )
+        }
+
+    @Test
+    fun `when event has stored meta type and version then stored values are sent`() =
+        runTest {
+            val event =
+                createWideEvent(
+                    id = 789L,
+                    name = "some-event",
+                    status = WideEventRepository.WideEventStatus.SUCCESS,
+                    metaType = "android-some-other-event",
+                    metaVersion = "2.1.3",
+                )
+
+            pixelWideEventSender.sendWideEvent(event)
+
+            verify(pixel).enqueueFire(
+                pixelName = eq("wide_some-event_c"),
+                parameters = argThat {
+                    get("meta.type") == "android-some-other-event" && get("meta.version") == "2.1.3"
+                },
+                encodedParameters = any(),
+                type = any(),
+            )
+        }
+
     private fun createWideEvent(
         id: Long,
         name: String,
@@ -127,6 +174,8 @@ class PixelWideEventSenderTest {
         metadata: Map<String, String?> = emptyMap(),
         flowEntryPoint: String? = null,
         samplingProbability: Float = 1.0f,
+        metaType: String? = null,
+        metaVersion: String = "1.0.0",
     ) = WideEventRepository.WideEvent(
         id = id,
         name = name,
@@ -143,5 +192,7 @@ class PixelWideEventSenderTest {
         ),
         createdAt = Instant.parse("2025-12-03T10:15:30.00Z"),
         samplingProbability = samplingProbability,
+        metaType = metaType,
+        metaVersion = metaVersion,
     )
 }

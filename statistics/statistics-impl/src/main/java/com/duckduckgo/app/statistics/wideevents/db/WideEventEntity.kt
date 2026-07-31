@@ -21,6 +21,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.ProvidedTypeConverter
 import androidx.room.TypeConverter
+import com.duckduckgo.app.statistics.wideevents.WideEventMeta
 import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonAdapter
@@ -54,6 +55,12 @@ data class WideEventEntity(
     val activeIntervals: List<WideEventInterval>,
     @ColumnInfo(name = "sampling_probability", defaultValue = "1.0")
     val samplingProbability: Float = 1.0f,
+    /** Null means the type is derived from [name] when the event is sent. */
+    @ColumnInfo(name = "meta_type")
+    val metaType: String? = null,
+    // Room reads defaultValue as a SQL literal, hence the quotes.
+    @ColumnInfo(name = "meta_version", defaultValue = "'1.0.0'")
+    val metaVersion: String = WideEventMeta.DEFAULT_VERSION,
 ) {
     data class MetadataEntry(
         @Json(name = "key")

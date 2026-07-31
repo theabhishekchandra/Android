@@ -259,6 +259,42 @@ class WideEventRepositoryTest {
         }
 
     @Test
+    fun `when meta parameters are stored, then they are returned with the event`() =
+        runTest {
+            val eventId =
+                wideEventRepository.insertWideEvent(
+                    name = "test_event",
+                    flowEntryPoint = null,
+                    metadata = emptyMap(),
+                    cleanupPolicy = DEFAULT_CLEANUP_POLICY,
+                    metaType = "android-test-event",
+                    metaVersion = "2.1.3",
+                )
+
+            with(wideEventRepository.getWideEvents(setOf(eventId)).single()) {
+                assertTrue(metaType == "android-test-event")
+                assertTrue(metaVersion == "2.1.3")
+            }
+        }
+
+    @Test
+    fun `when meta parameters are not provided, then event has no type and the initial version`() =
+        runTest {
+            val eventId =
+                wideEventRepository.insertWideEvent(
+                    name = "test_event",
+                    flowEntryPoint = null,
+                    metadata = emptyMap(),
+                    cleanupPolicy = DEFAULT_CLEANUP_POLICY,
+                )
+
+            with(wideEventRepository.getWideEvents(setOf(eventId)).single()) {
+                assertTrue(metaType == null)
+                assertTrue(metaVersion == "1.0.0")
+            }
+        }
+
+    @Test
     fun `when delete event then it is no longer accessible`() =
         runTest {
             val completedEventId =

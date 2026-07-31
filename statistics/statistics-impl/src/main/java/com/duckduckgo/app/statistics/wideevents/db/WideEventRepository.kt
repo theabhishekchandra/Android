@@ -16,6 +16,7 @@
 
 package com.duckduckgo.app.statistics.wideevents.db
 
+import com.duckduckgo.app.statistics.wideevents.WideEventMeta
 import kotlinx.coroutines.flow.Flow
 import java.time.Duration
 import java.time.Instant
@@ -27,6 +28,8 @@ interface WideEventRepository {
         metadata: Map<String, String?>,
         cleanupPolicy: CleanupPolicy,
         samplingProbability: Float = 1.0f,
+        metaType: String? = null,
+        metaVersion: String = WideEventMeta.DEFAULT_VERSION,
     ): Long
 
     suspend fun addWideEventStep(
@@ -76,6 +79,9 @@ interface WideEventRepository {
         val activeIntervals: List<WideEventInterval>,
         val createdAt: Instant,
         val samplingProbability: Float = 1.0f,
+        /** Null means the type is derived from [name] when the event is sent. */
+        val metaType: String? = null,
+        val metaVersion: String = WideEventMeta.DEFAULT_VERSION,
     )
 
     data class WideEventStep(
