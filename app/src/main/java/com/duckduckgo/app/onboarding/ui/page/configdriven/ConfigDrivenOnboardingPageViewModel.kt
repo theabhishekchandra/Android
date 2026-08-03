@@ -22,6 +22,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
+import com.duckduckgo.app.browser.defaultbrowsing.DefaultBrowserDetector
 import com.duckduckgo.app.browser.omnibar.OmnibarType
 import com.duckduckgo.app.global.DefaultRoleBrowserDialog
 import com.duckduckgo.app.global.install.AppInstallStore
@@ -66,6 +67,7 @@ class ConfigDrivenOnboardingPageViewModel @Inject constructor(
     private val newUserOnboardingPlanBootstrapper: NewUserOnboardingPlanBootstrapper,
     private val dialogConfigResolver: DialogConfigResolver,
     private val dispatchers: DispatcherProvider,
+    private val defaultBrowserDetector: DefaultBrowserDetector,
     private val widgetCapabilities: WidgetCapabilities,
     private val defaultRoleBrowserDialog: DefaultRoleBrowserDialog,
     private val context: Context,
@@ -89,6 +91,14 @@ class ConfigDrivenOnboardingPageViewModel @Inject constructor(
         data class FinishAndSubmitChatPrompt(val prompt: String) : Command
         data object OnboardingSkipped : Command
         data object HandOffToBrowserActivity : Command
+        data class ShowQuickSetupDefaultBrowserDialog(val intent: Intent) : Command
+        data object OpenDefaultBrowserSystemSettings : Command
+        data object ShowRemoveWidgetBottomSheet : Command
+        data class ShowQuickSetupAddressBarPositionBottomSheet(
+            val initialSelection: OmnibarType,
+            val showSplitOption: Boolean,
+        ) : Command
+        data class ShowQuickSetupSearchOptionsBottomSheet(val initialWithAi: Boolean) : Command
     }
 
     private val _viewState = MutableStateFlow(ViewState())
@@ -107,6 +117,8 @@ class ConfigDrivenOnboardingPageViewModel @Inject constructor(
 
     private var addWidgetPromptFlowStarted = false
 
+    private var quickSetupDefaultBrowserDialogShown = false
+
     init {
         start()
     }
@@ -122,6 +134,40 @@ class ConfigDrivenOnboardingPageViewModel @Inject constructor(
                     fromSuggestion = interaction.fromSuggestion,
                 ),
             )
+
+            ContentInteraction.EditAddressBarPosition -> {
+                val screen = currentQuickSetup() ?: return
+                viewModelScope.launch {
+                    _commands.send(
+                        Command.ShowQuickSetupAddressBarPositionBottomSheet(
+                            initialSelection = screen.state.value.addressBarPosition,
+                            showSplitOption = screen.content.showSplitOption,
+                        ),
+                    )
+                }
+            }
+
+            ContentInteraction.EditSearchOptions -> {
+                val screen = currentQuickSetup() ?: return
+                viewModelScope.launch {
+                    _commands.send(Command.ShowQuickSetupSearchOptionsBottomSheet(initialWithAi = screen.state.value.withAi))
+                }
+            }
+
+            // The switch has already flipped itself, so the store has to record that before any side effect: a
+            // later corrective write of the old value (declined system dialog, resume resync) would otherwise be
+            // deduped as a no-change and never reach the binder.
+            is ContentInteraction.SetDefaultBrowserToggled -> {
+                currentQuickSetup()?.state?.update { it.copy(defaultBrowserChecked = interaction.checked) }
+                if (interaction.checked) requestDefaultBrowser() else openDefaultBrowserSettings()
+            }
+
+            is ContentInteraction.AddWidgetToggled -> {
+                currentQuickSetup()?.state?.update { it.copy(widgetChecked = interaction.checked) }
+                viewModelScope.launch {
+                    _commands.send(if (interaction.checked) Command.LaunchAddWidgetPrompt else Command.ShowRemoveWidgetBottomSheet)
+                }
+            }
         }
     }
 
@@ -134,6 +180,7 @@ class ConfigDrivenOnboardingPageViewModel @Inject constructor(
     }
 
     fun onResume() {
+        syncQuickSetupSwitches()
         checkAddWidgetPromptResult()
     }
 
@@ -163,6 +210,37 @@ class ConfigDrivenOnboardingPageViewModel @Inject constructor(
         emit(NewUserOnboardingEvent.DefaultBrowserPromptFinished(isDefaultBrowser = false))
     }
 
+    fun onAddressBarBottomSheetResult(type: OmnibarType) {
+        currentQuickSetup()?.state?.update { it.copy(addressBarPosition = type) }
+    }
+
+    fun onSearchOptionsBottomSheetResult(withAi: Boolean) {
+        currentQuickSetup()?.state?.update { it.copy(withAi = withAi) }
+    }
+
+    /** Quick setup's own default-browser prompt: it never advances the step, which only moves on confirmation. */
+    fun onQuickSetupDefaultBrowserSet() {
+        recordDefaultBrowserDialogResult(isSet = true, fireTelemetry = false)
+    }
+
+    fun onQuickSetupDefaultBrowserNotSet() {
+        recordDefaultBrowserDialogResult(isSet = false, fireTelemetry = false)
+    }
+
+    /**
+     * Re-reads the OS state behind quick setup's two switches. Also called by the fragment when the system
+     * settings intent cannot be launched, since no activity starts and no later [onResume] follows.
+     */
+    fun syncQuickSetupSwitches() {
+        val screen = currentQuickSetup() ?: return
+        viewModelScope.launch {
+            val (isDefault, hasWidget) = withContext(dispatchers.io()) {
+                defaultBrowserDetector.isDefaultBrowser() to widgetCapabilities.hasInstalledWidgets
+            }
+            screen.state.update { it.copy(defaultBrowserChecked = isDefault, widgetChecked = hasWidget) }
+        }
+    }
+
     fun checkAddWidgetPromptResult() {
         if (addWidgetPromptFlowStarted) {
             viewModelScope.launch {
@@ -173,11 +251,46 @@ class ConfigDrivenOnboardingPageViewModel @Inject constructor(
         }
     }
 
-    private fun recordDefaultBrowserDialogResult(isSet: Boolean) {
+    private fun requestDefaultBrowser() {
+        viewModelScope.launch {
+            if (!quickSetupDefaultBrowserDialogShown) {
+                val intent = defaultRoleBrowserDialog.createIntent(context)
+                if (intent != null) {
+                    quickSetupDefaultBrowserDialogShown = true
+                    _commands.send(Command.ShowQuickSetupDefaultBrowserDialog(intent))
+                    return@launch
+                }
+            }
+            _commands.send(Command.OpenDefaultBrowserSystemSettings)
+        }
+    }
+
+    private fun openDefaultBrowserSettings() {
+        viewModelScope.launch { _commands.send(Command.OpenDefaultBrowserSystemSettings) }
+    }
+
+    private fun currentQuickSetup(): QuickSetupScreen? {
+        val state = _viewState.value
+        val stepId = state.stepId ?: return null
+        val content = state.config?.content as? ContentConfig.QuickSetup ?: return null
+        return QuickSetupScreen(content, contentValues.contentState(stepId, content))
+    }
+
+    private class QuickSetupScreen(
+        val content: ContentConfig.QuickSetup,
+        val state: MutableStateFlow<QuickSetupContentState>,
+    )
+
+    private fun recordDefaultBrowserDialogResult(
+        isSet: Boolean,
+        fireTelemetry: Boolean = true,
+    ) {
         defaultRoleBrowserDialog.dialogShown()
         appInstallStore.defaultBrowser = isSet
-        val pixelName = if (isSet) AppPixelName.DEFAULT_BROWSER_SET else AppPixelName.DEFAULT_BROWSER_NOT_SET
-        pixel.fire(pixelName, mapOf(PixelParameter.DEFAULT_BROWSER_SET_FROM_ONBOARDING to true.toString()))
+        if (fireTelemetry) {
+            val pixelName = if (isSet) AppPixelName.DEFAULT_BROWSER_SET else AppPixelName.DEFAULT_BROWSER_NOT_SET
+            pixel.fire(pixelName, mapOf(PixelParameter.DEFAULT_BROWSER_SET_FROM_ONBOARDING to true.toString()))
+        }
     }
 
     private fun start() {
