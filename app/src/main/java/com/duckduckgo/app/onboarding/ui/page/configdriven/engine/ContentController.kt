@@ -27,6 +27,7 @@ import com.duckduckgo.app.onboarding.ui.page.configdriven.binders.AddToDockBinde
 import com.duckduckgo.app.onboarding.ui.page.configdriven.binders.AddressBarBinder
 import com.duckduckgo.app.onboarding.ui.page.configdriven.binders.ComparisonChartBinder
 import com.duckduckgo.app.onboarding.ui.page.configdriven.binders.WelcomeBinder
+import com.duckduckgo.app.onboarding.ui.page.configdriven.binders.WidgetPromptBinder
 import com.duckduckgo.onboarding.api.LinearOnboardingStepId
 
 interface ContentController {
@@ -51,6 +52,7 @@ class ContentControllerImpl(
     private val addressBar = AddressBarBinder(binding.addressBarContent, isLightMode)
     private val welcome = WelcomeBinder(binding.welcomeContent)
     private val addToDock = AddToDockBinder(binding.addToDockContent)
+    private val widgetPrompt = WidgetPromptBinder(binding.widgetPromptContent)
 
     private var boundView: View? = null
 
@@ -93,6 +95,10 @@ class ContentControllerImpl(
             is ContentConfig.AddToDock -> {
                 boundView = addToDock.view
                 addToDock.bind(content, scope)
+            }
+            is ContentConfig.WidgetPrompt -> {
+                boundView = widgetPrompt.view
+                widgetPrompt.bind(content, scope)
             }
         }
         boundView?.isVisible = true
