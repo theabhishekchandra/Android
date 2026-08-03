@@ -69,6 +69,7 @@ class DialogRenderEngine(
         stepId: LinearOnboardingStepId,
         config: DialogConfig,
         animate: Boolean,
+        animateBackground: Boolean = animate,
     ) {
         if (stepId == previousStepId && config == previous && bound != null) return
 
@@ -77,7 +78,7 @@ class DialogRenderEngine(
         unbindCurrent()
         if (freshStage) content.resetStage()
 
-        background.apply(previous?.background, config.background, animate)
+        background.apply(previous?.background, config.background, animateBackground)
         stepIndicator.apply(previous?.stepIndicator, config.stepIndicator, animate)
         cardArrow.apply(previous?.cardArrow, config.cardArrow, animate)
 

@@ -30,7 +30,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.ViewGroupCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnLayout
-import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
@@ -89,6 +88,7 @@ class ConfigDrivenWelcomePage : OnboardingPageFragment(R.layout.content_onboardi
     }
 
     private var engine: DialogRenderEngine? = null
+    private var intro: OnboardingIntroChoreographer? = null
 
     /** Fed to the embellishment controller's fit corrector; kept in sync by the window-insets listener below. */
     private var cardBottomInsetPx = 0
@@ -145,6 +145,8 @@ class ConfigDrivenWelcomePage : OnboardingPageFragment(R.layout.content_onboardi
 
         val cardAnchor = CardAnchorControllerImpl(binding, CardAnchorResolver(deviceInfo.isTablet()))
 
+        intro = OnboardingIntroChoreographer(binding)
+
         engine = DialogRenderEngine(
             content = ContentControllerImpl(
                 binding = binding.daxDialogCta,
@@ -180,7 +182,14 @@ class ConfigDrivenWelcomePage : OnboardingPageFragment(R.layout.content_onboardi
 
         viewModel.viewState
             .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
-            .onEach { state -> if (state.config != null) renderConfig(state) }
+            .onEach { state ->
+                when (val screen = state.screen) {
+                    is ConfigDrivenOnboardingPageViewModel.Screen.Intro -> showIntro(screen)
+                    is ConfigDrivenOnboardingPageViewModel.Screen.Dialog -> renderDialog(screen)
+                    ConfigDrivenOnboardingPageViewModel.Screen.None -> intro?.dismissUnplayed()
+                    null -> Unit
+                }
+            }
             .launchIn(viewLifecycleOwner.lifecycleScope)
 
         viewModel.commands
@@ -189,35 +198,43 @@ class ConfigDrivenWelcomePage : OnboardingPageFragment(R.layout.content_onboardi
             .launchIn(viewLifecycleOwner.lifecycleScope)
     }
 
-    /**
-     * Temporary until the intro animators are implemented in the follow-up.
-     */
-    private fun settleIntroViews() {
-        binding.logoAnimation.isVisible = false
-        binding.welcomeTitle.alpha = 0f
-        binding.duckAiIntroAnimation.isVisible = false
+    private fun showIntro(screen: ConfigDrivenOnboardingPageViewModel.Screen.Intro) {
+        when (screen) {
+            is ConfigDrivenOnboardingPageViewModel.Screen.Intro.Play -> {
+                viewModel.onIntroAnimationStarted()
+                intro?.play(withDuckAi = screen.withDuckAi) { viewModel.onIntroAnimationFinished() }
+            }
+            is ConfigDrivenOnboardingPageViewModel.Screen.Intro.Restore -> {
+                if (intro?.restore(withDuckAi = screen.withDuckAi) == true) viewModel.onIntroAnimationFinished()
+            }
+        }
     }
 
-    private fun renderConfig(state: ConfigDrivenOnboardingPageViewModel.ViewState) {
+    private fun renderDialog(screen: ConfigDrivenOnboardingPageViewModel.Screen.Dialog) {
         val engine = engine ?: return
-        val stepId = state.stepId ?: return
-        val config = state.config ?: return
 
-        if (!hasRenderedOnce) {
+        if (hasRenderedOnce) {
+            engine.render(screen.stepId, screen.config, screen.animateEntry)
+            viewModel.onDialogRendered(screen.stepId)
+            return
+        }
+
+        val overIntroVisuals = intro?.clearForFirstDialog() ?: false
+        // A retained view model emits before a recreated view has been laid out, and the decoration fit
+        // check measures the root's height — measuring at 0 would hide the decoration for good.
+        binding.root.doOnLayout {
+            val live = viewModel.viewState.value.screen as? ConfigDrivenOnboardingPageViewModel.Screen.Dialog ?: return@doOnLayout
             hasRenderedOnce = true
-            settleIntroViews()
-            // A retained view model emits before a recreated view has been laid out, and the decoration fit
-            // check measures the root's height — measuring at 0 would hide the decoration for good.
-            binding.root.doOnLayout {
-                val live = viewModel.viewState.value
-                val liveStepId = live.stepId ?: return@doOnLayout
-                val liveConfig = live.config ?: return@doOnLayout
-                engine.render(liveStepId, liveConfig, live.animateEntry)
-                viewModel.onDialogRendered(liveStepId)
-            }
-        } else {
-            engine.render(stepId, config, state.animateEntry)
-            viewModel.onDialogRendered(stepId)
+            // If this is the first time we render, and there was no intro on screen, there's no background to animate from,
+            // so skip the cross-fade and just snap to the new background.
+            val animateBackground = overIntroVisuals && live.animateEntry
+            engine.render(
+                live.stepId,
+                live.config,
+                animate = live.animateEntry,
+                animateBackground = animateBackground,
+            )
+            viewModel.onDialogRendered(live.stepId)
         }
     }
 
@@ -258,6 +275,9 @@ class ConfigDrivenWelcomePage : OnboardingPageFragment(R.layout.content_onboardi
         super.onDestroyView()
         engine?.release()
         engine = null
+        intro?.release()
+        intro = null
+        hasRenderedOnce = false
     }
 
     private companion object {
