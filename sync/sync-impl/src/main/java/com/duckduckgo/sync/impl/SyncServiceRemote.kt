@@ -166,6 +166,7 @@ class SyncServiceRemote @Inject constructor(
     private val syncService: SyncService,
     private val syncStore: SyncStore,
     private val setKeysIfAbsentCall: SetKeysIfAbsentCall,
+    private val syncFeature: SyncFeature,
 ) : SyncApi {
     override fun createAccount(
         userID: String,
@@ -515,7 +516,7 @@ class SyncServiceRemote @Inject constructor(
             } else {
                 Result.Error(reason = "internal error")
             }
-            error.removeKeysIfInvalid()
+            error.removeKeysIfInvalid(token)
             error
         }
     }
@@ -530,7 +531,7 @@ class SyncServiceRemote @Inject constructor(
         } else {
             Result.Error(code = response.code(), reason = "empty response")
         }
-        error.removeKeysIfInvalid()
+        error.removeKeysIfInvalid(response.requestAuthToken())
         return error
     }
 
@@ -548,12 +549,12 @@ class SyncServiceRemote @Inject constructor(
                     val code = if (error.code == -1) response.code() else error.code
                     Result.Error(code, error.error)
                 } ?: Result.Error(code = response.code(), reason = response.message().toString())
-                error.removeKeysIfInvalid()
+                error.removeKeysIfInvalid(response.requestAuthToken())
                 return error
             }
         }.getOrElse {
             val result = Result.Error(response.code(), reason = response.message())
-            result.removeKeysIfInvalid()
+            result.removeKeysIfInvalid(response.requestAuthToken())
             return result
         }
     }
@@ -578,7 +579,7 @@ class SyncServiceRemote @Inject constructor(
         keys: List<ProtectedKeyEntry>,
     ): Result<SetKeysIfAbsentResult> {
         val result = setKeysIfAbsentCall.execute(token, purpose, keys)
-        if (result is Result.Error) result.removeKeysIfInvalid()
+        if (result is Result.Error) result.removeKeysIfInvalid(token)
         return result
     }
 
@@ -646,10 +647,21 @@ class SyncServiceRemote @Inject constructor(
         return onSuccess(response) { Result.Success(Unit) }
     }
 
-    private fun Result.Error.removeKeysIfInvalid() {
-        if (code == API_CODE.INVALID_LOGIN_CREDENTIALS.code) {
+    private fun Result.Error.removeKeysIfInvalid(requestToken: String?) {
+        if (code != API_CODE.INVALID_LOGIN_CREDENTIALS.code) return
+
+        // A 401 for a token that has since been rotated is stale and must not sign the device out:
+        // renaming a device re-logs in (issuing a fresh token), so a concurrent request that raced the
+        // token swap can 401 on the old token while the account is still valid. Only wipe local state
+        // when the token that failed is still the current one (or unknown, preserving prior behavior).
+        val tokenStillCurrent = requestToken == null || requestToken == syncStore.token
+        if (!syncFeature.preventStaleTokenLogout().isEnabled() || tokenStillCurrent) {
             syncStore.clearAll()
         }
+    }
+
+    private fun Response<*>.requestAuthToken(): String? {
+        return raw().request.header("Authorization")?.removePrefix("Bearer ")
     }
 
     private class Adapters {

@@ -108,4 +108,7 @@ interface SyncFeature {
 
     @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
     fun updateSyncActivityViewStateAtomically(): Toggle
+
+    @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
+    fun preventStaleTokenLogout(): Toggle
 }
