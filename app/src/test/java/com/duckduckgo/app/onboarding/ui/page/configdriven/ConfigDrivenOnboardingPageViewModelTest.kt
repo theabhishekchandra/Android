@@ -30,6 +30,7 @@ import com.duckduckgo.app.onboarding.orchestrator.NewUserOnboardingActivityStep
 import com.duckduckgo.app.onboarding.orchestrator.NewUserOnboardingEvent
 import com.duckduckgo.app.onboarding.orchestrator.NewUserOnboardingPlanBootstrapper
 import com.duckduckgo.app.onboarding.orchestrator.NewUserOnboardingPlanProvider
+import com.duckduckgo.app.onboarding.store.OnboardingStore
 import com.duckduckgo.app.onboarding.ui.page.OnboardingBackgroundStep
 import com.duckduckgo.app.onboarding.ui.page.configdriven.ConfigDrivenOnboardingPageViewModel.Command
 import com.duckduckgo.app.statistics.pixels.Pixel
@@ -71,6 +72,7 @@ class ConfigDrivenOnboardingPageViewModelTest {
     private val mockWidgetCapabilities: WidgetCapabilities = mock()
     private val customAiOnboardingStore: CustomAiOnboardingStore = mock()
     private val newUserOnboardingPlanBootstrapper: NewUserOnboardingPlanBootstrapper = mock()
+    private val mockOnboardingStore: OnboardingStore = mock()
 
     // Default harness: mock orchestrator left NotStarted, so the view model renders no dialog and emits no
     // commands on its own — the interaction tests drive a single method and assert exactly what it emits.
@@ -103,7 +105,7 @@ class ConfigDrivenOnboardingPageViewModelTest {
     ): ConfigDrivenOnboardingPageViewModel = ConfigDrivenOnboardingPageViewModel(
         orchestrator = orchestrator,
         newUserOnboardingPlanBootstrapper = newUserOnboardingPlanBootstrapper,
-        dialogConfigResolver = DialogConfigResolver(),
+        dialogConfigResolver = DialogConfigResolver(mockOnboardingStore),
         dispatchers = coroutineRule.testDispatcherProvider,
         widgetCapabilities = mockWidgetCapabilities,
         defaultRoleBrowserDialog = mockDefaultRoleBrowserDialog,
@@ -232,5 +234,19 @@ class ConfigDrivenOnboardingPageViewModelTest {
             advanceUntilIdle()
             assertEquals(Command.HandOffToBrowserActivity, awaitItem())
         }
+    }
+
+    @Test
+    fun `forwards a submitted input demo query to the orchestrator`() = runTest {
+        val testee = startAt(NewUserOnboardingActivityDialog.ComparisonChart)
+        advanceUntilIdle()
+
+        testee.onContentInteraction(ContentInteraction.SubmitInput(query = "cats", isChat = true, fromSuggestion = true))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(NewUserOnboardingEvent.InputDemoQuerySubmitted(query = "cats", isChat = true, fromSuggestion = true)),
+            recordedEvents,
+        )
     }
 }
