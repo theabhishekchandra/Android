@@ -170,8 +170,8 @@ class OnboardingIntroChoreographer(
         }
 
         val animators = mutableListOf<Animator>(logoFade, textFade)
-        // duckAiIntroAnimation is only ever made visible by playIntroAnimation's withDuckAi branch, so its
-        // current visibility is exactly the signal for whether this run needs to fade it out too.
+        // duckAiIntroAnimation starts invisible and is only ever shown on a withDuckAi run, whether it played
+        // or was snapped, so its current visibility is exactly the signal for whether to fade it out too.
         if (binding.duckAiIntroAnimation.isVisible) {
             val duckAiIntroFade = ObjectAnimator.ofFloat(binding.duckAiIntroAnimation, View.ALPHA, 1f, 0f).apply {
                 duration = OUTRO_FADE_DURATION

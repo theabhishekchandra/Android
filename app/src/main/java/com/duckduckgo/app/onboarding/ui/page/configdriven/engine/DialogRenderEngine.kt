@@ -64,6 +64,8 @@ class DialogRenderEngine(
 
     /**
      * Renders [config] for [stepId], animated when [animate].
+     *
+     * [animateBackground] splits the background off the [animate] policy, where needed.
      */
     fun render(
         stepId: LinearOnboardingStepId,
