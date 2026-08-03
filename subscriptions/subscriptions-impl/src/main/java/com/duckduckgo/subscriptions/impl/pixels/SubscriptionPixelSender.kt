@@ -20,6 +20,7 @@ import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.common.utils.extensions.toSanitizedLanguageTag
 import com.duckduckgo.di.scopes.AppScope
+import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.ORIGIN_APP_SETTINGS
 import com.duckduckgo.subscriptions.impl.pixels.SubscriptionPixel.ACTIVATE_SUBSCRIPTION_ENTER_EMAIL_CLICK
 import com.duckduckgo.subscriptions.impl.pixels.SubscriptionPixel.ACTIVATE_SUBSCRIPTION_RESTORE_PURCHASE_CLICK
 import com.duckduckgo.subscriptions.impl.pixels.SubscriptionPixel.APP_SETTINGS_GET_SUBSCRIPTION_CLICK
@@ -87,8 +88,8 @@ import javax.inject.Inject
 
 interface SubscriptionPixelSender {
     fun reportSubscriptionActive()
-    fun reportOfferScreenShown()
-    fun reportOfferSubscribeClick()
+    fun reportOfferScreenShown(origin: String?)
+    fun reportOfferSubscribeClick(origin: String?)
     fun reportPurchaseFailureOther(
         errorType: String,
         reason: String? = null,
@@ -162,15 +163,23 @@ class SubscriptionPixelSenderImpl @Inject constructor(
             ),
         )
 
-    override fun reportOfferScreenShown() {
+    override fun reportOfferScreenShown(origin: String?) {
         paywallMetricsManager.recordFirstPaywallSeen()?.let { dayBucket ->
             fire(PAYWALL_SHOWN_FIRST_TIME, mapOf(DAYS_SINCE_INSTALL to dayBucket))
         }
-        fire(OFFER_SCREEN_SHOWN)
+        // Subscription-funnel: carry the entry-point origin the offer was launched with so the
+        // impression joins to the click/purchase for the same origin.
+        fire(OFFER_SCREEN_SHOWN, funnelOriginParams(origin))
     }
 
-    override fun reportOfferSubscribeClick() =
-        fire(OFFER_SUBSCRIBE_CLICK)
+    override fun reportOfferSubscribeClick(origin: String?) =
+        fire(OFFER_SUBSCRIBE_CLICK, funnelOriginParams(origin))
+
+    // The origin can be supplied by a web page via the `?origin=` URL param.
+    // Only attach it to the pixel when it matches the expected funnel_... format; otherwise send no origin.
+    private fun funnelOriginParams(origin: String?): Map<String, String> =
+        origin?.takeUnless { it.isBlank() }?.takeIf { FUNNEL_ORIGIN_REGEX.matches(it) }
+            ?.let { mapOf("origin" to it) } ?: emptyMap()
 
     override fun reportPurchaseFailureOther(
         errorType: String,
@@ -268,7 +277,7 @@ class SubscriptionPixelSenderImpl @Inject constructor(
         fire(APP_SETTINGS_IDTR_CLICK)
 
     override fun reportAppSettingsGetSubscriptionClick() =
-        fire(APP_SETTINGS_GET_SUBSCRIPTION_CLICK)
+        fire(APP_SETTINGS_GET_SUBSCRIPTION_CLICK, mapOf("origin" to ORIGIN_APP_SETTINGS))
 
     override fun reportAppSettingsRestorePurchaseClick() =
         fire(APP_SETTINGS_RESTORE_PURCHASE_CLICK)
@@ -393,5 +402,10 @@ class SubscriptionPixelSenderImpl @Inject constructor(
                 pixelSender.fire(pixelName = pixelName, type = pixelType, parameters = params)
             }
         }
+    }
+
+    private companion object {
+        // Length-bounded to cap the URL size a page can inject via `?origin=` ([a-z0-9_] already covers `__`).
+        private val FUNNEL_ORIGIN_REGEX = Regex("^funnel_[a-z0-9_]{1,64}$")
     }
 }

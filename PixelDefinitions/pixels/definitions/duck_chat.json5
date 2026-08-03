@@ -1099,6 +1099,27 @@
                 "type": "string",
                 "description": "The tapper's current tier",
                 "enum": ["free", "plus"]
+            },
+            {
+                "key": "origin",
+                "type": "string",
+                "description": "Subscription-funnel entry point",
+                "enum": ["funnel_duckai_android__freelabel"]
+            }
+        ]
+    },
+    "m_aichat_unified_input_free_label_shown": {
+        "description": "Subscription-funnel impression: the upgradeable 'Free' pill in the Duck.ai omnibar header became visible",
+        "owners": ["YoussefKeyrouz"],
+        "triggers": ["other"],
+        "suffixes": ["form_factor"],
+        "parameters": [
+            "appVersion",
+            {
+                "key": "origin",
+                "type": "string",
+                "description": "Subscription-funnel entry point",
+                "enum": ["funnel_duckai_android__freelabel"]
             }
         ]
     },
@@ -1291,6 +1312,56 @@
                 "type": "string",
                 "description": "The type of subscription flow offered",
                 "enum": ["purchase", "upgrade"]
+            },
+            {
+                "key": "origin",
+                "type": "string",
+                "description": "Subscription-funnel entry point (the gated picker) the upsell was triggered from",
+                "enum": [
+                    "funnel_addressbar_android__modelpicker",
+                    "funnel_addressbar_android__reasoningdropdown",
+                    "funnel_duckai_android__modelpicker",
+                    "funnel_duckai_android__reasoningdropdown",
+                    "funnel_duckai_android__switchmodel"
+                ]
+            }
+        ]
+    },
+    // Subscription-funnel impressions for the conversion dashboard. Fires when the picker is shown.
+    // The matching "click" is m_aichat_unified_input_subscription_upsell_triggered (gated tap). The
+    // `origin` parameter identifies the entry point and matches the subscription-purchase attribution
+    // origin (context.name on wide_subscription-purchase), so this joins directly to purchase data.
+    "m_aichat_unified_input_model_picker_shown": {
+        "description": "Subscription-funnel impression: the Unified Input model picker was shown to the user",
+        "owners": ["YoussefKeyrouz"],
+        "triggers": ["other"],
+        "suffixes": ["form_factor"],
+        "parameters": [
+            "appVersion",
+            {
+                "key": "origin",
+                "type": "string",
+                "description": "Entry point where the picker was shown",
+                "enum": [
+                    "funnel_addressbar_android__modelpicker",
+                    "funnel_duckai_android__modelpicker",
+                    "funnel_duckai_android__switchmodel"
+                ]
+            }
+        ]
+    },
+    "m_aichat_unified_input_reasoning_effort_picker_shown": {
+        "description": "Subscription-funnel impression: the Unified Input reasoning effort picker was shown to the user",
+        "owners": ["YoussefKeyrouz"],
+        "triggers": ["other"],
+        "suffixes": ["form_factor"],
+        "parameters": [
+            "appVersion",
+            {
+                "key": "origin",
+                "type": "string",
+                "description": "Entry point where the picker was shown (also the subscription-purchase attribution origin)",
+                "enum": ["funnel_addressbar_android__reasoningdropdown", "funnel_duckai_android__reasoningdropdown"]
             }
         ]
     },

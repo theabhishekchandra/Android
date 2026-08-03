@@ -91,6 +91,10 @@ object SubscriptionsConstants {
     const val FEATURE_PAGE_QUERY_PARAM_KEY = "featurePage"
     const val SUBSCRIPTIONS_PATH = "pro"
     const val PRIVACY_SUBSCRIPTIONS_PATH = "subscriptions"
+
+    // Subscription-funnel origin for the app-settings "Get Subscription" entry point. Used both to
+    // launch the buy webview (ProSettingView) and on the app-settings click pixel (SubscriptionPixelSender).
+    const val ORIGIN_APP_SETTINGS = "funnel_appsettings_android"
 }
 
 enum class SubscriptionTier(val value: String) {

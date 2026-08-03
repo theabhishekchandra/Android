@@ -22,6 +22,7 @@ import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 
 class SubscriptionPixelSenderImplTest {
@@ -74,6 +75,60 @@ class SubscriptionPixelSenderImplTest {
         verify(pixel).fire(
             pixelName = "m_subscription_expiration_reminder_not_fired_permissions_rejected",
             type = Count,
+        )
+    }
+
+    @Test
+    fun whenReportOfferScreenShownWithOriginThenFiresImpressionWithOrigin() {
+        testee.reportOfferScreenShown("funnel_appsettings_android")
+
+        verify(pixel).fire(
+            pixelName = "m_privacy-pro_offer_screen_impression_c",
+            type = Count,
+            parameters = mapOf("origin" to "funnel_appsettings_android"),
+        )
+    }
+
+    @Test
+    fun whenReportOfferScreenShownWithoutOriginThenFiresImpressionWithNoParams() {
+        testee.reportOfferScreenShown(null)
+
+        verify(pixel).fire(
+            pixelName = "m_privacy-pro_offer_screen_impression_c",
+            type = Count,
+        )
+    }
+
+    @Test
+    fun whenReportOfferScreenShownWithInvalidOrBlankOriginThenOriginIsDropped() {
+        testee.reportOfferScreenShown("javascript:alert(1)")
+        testee.reportOfferScreenShown("")
+
+        verify(pixel, times(2)).fire(
+            pixelName = "m_privacy-pro_offer_screen_impression_c",
+            type = Count,
+        )
+    }
+
+    @Test
+    fun whenReportOfferSubscribeClickWithOriginThenFiresWithOrigin() {
+        testee.reportOfferSubscribeClick("funnel_duckai_android__modelpicker")
+
+        verify(pixel).fire(
+            pixelName = "m_privacy-pro_terms-conditions_subscribe_click_c",
+            type = Count,
+            parameters = mapOf("origin" to "funnel_duckai_android__modelpicker"),
+        )
+    }
+
+    @Test
+    fun whenReportAppSettingsGetSubscriptionClickThenFiresWithAppSettingsOrigin() {
+        testee.reportAppSettingsGetSubscriptionClick()
+
+        verify(pixel).fire(
+            pixelName = "m_privacy-pro_app-settings_get_click_c",
+            type = Count,
+            parameters = mapOf("origin" to "funnel_appsettings_android"),
         )
     }
 }
